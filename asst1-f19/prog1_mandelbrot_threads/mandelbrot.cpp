@@ -125,20 +125,11 @@ typedef struct {
 // Thread entrypoint.
 void* workerThreadStart(void* threadArgs) {
 
-        WorkerArgs* args = static_cast<WorkerArgs*>(threadArgs);
+    WorkerArgs* args = static_cast<WorkerArgs*>(threadArgs);
 
-    // TODO: Implement worker thread here.
-    //    double startTime = CycleTimer::currentSeconds();
-        //    printf("Hello world from thread %d\n", args->threadId);
-    float dx = (args->x1 - args->x0)/args->width;
-    float dy = (args->y1 - args->y0)/args->height;
-    int internal = args->height/(args->numThreads * args->numThreads);
-    int addition_count = args->height%(args->numThreads * args->numThreads);
-
-    int addition_per_thread = addition_count/args->numThreads;
-    int additional_addition = addition_count%args->numThreads;
-    // addition_per_thread = (args->threadId < additional_addition)? addition_per_thread + 1;
-    int addition_start = args->height - addition_count;
+    int addition_per_thread = args->addition_count / args->numThreads;
+    int additional_addition = args->addition_count % args->numThreads;
+    int addition_start = args->height - args->addition_count;
     if(args->threadId < additional_addition){
         addition_start += (addition_per_thread+1) *args->threadId;
         addition_per_thread += 1;
@@ -147,23 +138,21 @@ void* workerThreadStart(void* threadArgs) {
                          * addition_per_thread
                          + (additional_addition)*(addition_per_thread + 1);
     }
-    
-    int stage = internal * args->numThreads;
-    int write_count = stage + addition_per_thread;
+    int write_count = args->stage + addition_per_thread;
     int cnt = 0;
     int addition_cnt = 0;
     for(int j = 0; j < write_count; j++){
         if(j != 0 && j % args->numThreads == 0){
             cnt++;
         }
-        int start_row = (j%args->numThreads) * stage +args->threadId * internal + cnt;
-        if(cnt >= internal) {
+        int start_row = (j % args->numThreads) * args->stage +args->threadId * args->internal + cnt;
+        if(cnt >= args->internal) {
             start_row = addition_start + addition_cnt;
             addition_cnt++;
         }
         for(size_t i = 0; i < args->width; i++){
-            float x = args->x0 + i* dx;
-            float y = args->y0 + start_row * dy;
+            float x = args->x0 + i* args->dx;
+            float y = args->y0 + start_row * args->dy;
 
             int index = start_row * args->width + i;
             args->output[index] = mandel(x, y, args->maxIterations);
@@ -204,11 +193,11 @@ void mandelbrotThread(
 
     for(int i = 0; i < numThreads; i++){
     // TODO: Set thread arguments here.
-        args[i]->dx = dx;
-        args[i]->dy = dy;
-        args[i]->internal = internal;
-        args[i]->addition_count = addition_count;
-        args[i]->stage = stage;
+        args[i].dx = dx;
+        args[i].dy = dy;
+        args[i].internal = internal;
+        args[i].addition_count = addition_count;
+        args[i].stage = stage;
         args[i].threadId = i;
         args[i].x0 = x0;
         args[i].y0 = y0;
