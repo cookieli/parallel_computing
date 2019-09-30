@@ -109,6 +109,12 @@ typedef struct {
     int* output;
     int threadId;
     int numThreads;
+
+    float dx;
+    float dy;
+    int internal;
+    int addition_count;
+    int stage;
 } WorkerArgs;
 
 
@@ -122,32 +128,50 @@ void* workerThreadStart(void* threadArgs) {
         WorkerArgs* args = static_cast<WorkerArgs*>(threadArgs);
 
     // TODO: Implement worker thread here.
-        double startTime = CycleTimer::currentSeconds();
-    printf("Hello world from thread %d\n", args->threadId);
+    //    double startTime = CycleTimer::currentSeconds();
+        //    printf("Hello world from thread %d\n", args->threadId);
     float dx = (args->x1 - args->x0)/args->width;
     float dy = (args->y1 - args->y0)/args->height;
-    int startRow, endRow;
-    int height_per_thread = args->height/args->numThreads;
-    int remainder = args->height % args->numThreads;
-    if(args->threadId < remainder){
-        startRow = args->threadId * (height_per_thread + 1);
-        endRow = startRow + (height_per_thread + 1);
-    } else{
-        startRow = remainder*(height_per_thread + 1) + (args->threadId - remainder)*height_per_thread;
-        endRow = startRow + height_per_thread;
-    }
-    //now we need test why it can not speed up linearly
-    for(int j= startRow; j < endRow; j++){
-        for(size_t i = 0; i < args->width; i++){
-            float x = args->x0 + i * dx;
-            float y = args->y0 + j * dy;
+    int internal = args->height/(args->numThreads * args->numThreads);
+    int addition_count = args->height%(args->numThreads * args->numThreads);
 
-            int index = (j * args->width + i);
+    int addition_per_thread = addition_count/args->numThreads;
+    int additional_addition = addition_count%args->numThreads;
+    // addition_per_thread = (args->threadId < additional_addition)? addition_per_thread + 1;
+    int addition_start = args->height - addition_count;
+    if(args->threadId < additional_addition){
+        addition_start += (addition_per_thread+1) *args->threadId;
+        addition_per_thread += 1;
+    } else {
+        addition_start  += (args->threadId - additional_addition)
+                         * addition_per_thread
+                         + (additional_addition)*(addition_per_thread + 1);
+    }
+    
+    int stage = internal * args->numThreads;
+    int write_count = stage + addition_per_thread;
+    int cnt = 0;
+    int addition_cnt = 0;
+    for(int j = 0; j < write_count; j++){
+        if(j != 0 && j % args->numThreads == 0){
+            cnt++;
+        }
+        int start_row = (j%args->numThreads) * stage +args->threadId * internal + cnt;
+        if(cnt >= internal) {
+            start_row = addition_start + addition_cnt;
+            addition_cnt++;
+        }
+        for(size_t i = 0; i < args->width; i++){
+            float x = args->x0 + i* dx;
+            float y = args->y0 + start_row * dy;
+
+            int index = start_row * args->width + i;
             args->output[index] = mandel(x, y, args->maxIterations);
         }
     }
-    double endTime = CycleTimer::currentSeconds();
-    printf("this thread %d executes time [%.3f] ms\n", args->threadId, (endTime - startTime)*1000);
+    //now we need test why it can not speed up linearly
+    // double endTime = CycleTimer::currentSeconds();
+    //  printf("this thread %d executes time [%.3f] ms\n", args->threadId, (endTime - startTime)*1000);
     return NULL;
 }
 
@@ -172,9 +196,19 @@ void mandelbrotThread(
 
     pthread_t workers[MAX_THREADS];
     WorkerArgs args[MAX_THREADS];
+    float dx = (x1 - x0)/width;
+    float dy = (y1 - y0)/height;
+    int internal = height/(numThreads *numThreads);
+    int addition_count = height%(numThreads * numThreads);
+    int stage = internal * numThreads;
 
     for(int i = 0; i < numThreads; i++){
     // TODO: Set thread arguments here.
+        args[i]->dx = dx;
+        args[i]->dy = dy;
+        args[i]->internal = internal;
+        args[i]->addition_count = addition_count;
+        args[i]->stage = stage;
         args[i].threadId = i;
         args[i].x0 = x0;
         args[i].y0 = y0;
@@ -191,12 +225,12 @@ void mandelbrotThread(
     // are created and the main app thread is used as a worker as
     // well.
 
-     for (int i=1; i<numThreads; i++)
+      for (int i=1; i<numThreads; i++)
         pthread_create(&workers[i], NULL, workerThreadStart, &args[i]);
 
     workerThreadStart(&args[0]);
 
     // wait for worker threads to complete
-    for (int i=1; i<numThreads; i++)
+       for (int i=1; i<numThreads; i++)
           pthread_join(workers[i], NULL);
 }
