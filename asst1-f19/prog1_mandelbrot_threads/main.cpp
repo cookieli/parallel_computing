@@ -162,7 +162,6 @@ int main(int argc, char** argv) {
 
     if (! verifyResult (output_serial, output_thread, width, height)) {
         printf ("ERROR : Output from threads does not match serial output\n");
-
         delete[] output_serial;
         delete[] output_thread;
 

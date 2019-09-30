@@ -85,7 +85,7 @@ void mandelbrotSerial(
 {
     float dx = (x1 - x0) / width;
     float dy = (y1 - y0) / height;
-
+    // printf("dx %f dy %f", dx, dy);
     for (int j = startRow; j < endRow; j++) {
         for (int i = 0; i < width; ++i) {
             float x = x0 + i * dx;
@@ -95,6 +95,7 @@ void mandelbrotSerial(
             output[index] = mandel(x, y, maxIterations);
         }
     }
+    
 }
 
 
@@ -118,12 +119,35 @@ typedef struct {
 // Thread entrypoint.
 void* workerThreadStart(void* threadArgs) {
 
-    WorkerArgs* args = static_cast<WorkerArgs*>(threadArgs);
+        WorkerArgs* args = static_cast<WorkerArgs*>(threadArgs);
 
     // TODO: Implement worker thread here.
-
+        double startTime = CycleTimer::currentSeconds();
     printf("Hello world from thread %d\n", args->threadId);
+    float dx = (args->x1 - args->x0)/args->width;
+    float dy = (args->y1 - args->y0)/args->height;
+    int startRow, endRow;
+    int height_per_thread = args->height/args->numThreads;
+    int remainder = args->height % args->numThreads;
+    if(args->threadId < remainder){
+        startRow = args->threadId * (height_per_thread + 1);
+        endRow = startRow + (height_per_thread + 1);
+    } else{
+        startRow = remainder*(height_per_thread + 1) + (args->threadId - remainder)*height_per_thread;
+        endRow = startRow + height_per_thread;
+    }
+    //now we need test why it can not speed up linearly
+    for(int j= startRow; j < endRow; j++){
+        for(size_t i = 0; i < args->width; i++){
+            float x = args->x0 + i * dx;
+            float y = args->y0 + j * dy;
 
+            int index = (j * args->width + i);
+            args->output[index] = mandel(x, y, args->maxIterations);
+        }
+    }
+    double endTime = CycleTimer::currentSeconds();
+    printf("this thread %d executes time [%.3f] ms\n", args->threadId, (endTime - startTime)*1000);
     return NULL;
 }
 
@@ -149,21 +173,30 @@ void mandelbrotThread(
     pthread_t workers[MAX_THREADS];
     WorkerArgs args[MAX_THREADS];
 
-    for (int i=0; i<numThreads; i++) {
-        // TODO: Set thread arguments here.
+    for(int i = 0; i < numThreads; i++){
+    // TODO: Set thread arguments here.
         args[i].threadId = i;
+        args[i].x0 = x0;
+        args[i].y0 = y0;
+        args[i].x1 = x1;
+        args[i].y1 = y1;
+        args[i].width = width;
+        args[i].height = height;
+        args[i].output = output;
+        args[i].maxIterations = maxIterations;
+        args[i].numThreads = numThreads;
     }
 
     // Fire up the worker threads.  Note that numThreads-1 pthreads
     // are created and the main app thread is used as a worker as
     // well.
 
-    for (int i=1; i<numThreads; i++)
+     for (int i=1; i<numThreads; i++)
         pthread_create(&workers[i], NULL, workerThreadStart, &args[i]);
 
     workerThreadStart(&args[0]);
 
     // wait for worker threads to complete
     for (int i=1; i<numThreads; i++)
-        pthread_join(workers[i], NULL);
+          pthread_join(workers[i], NULL);
 }
