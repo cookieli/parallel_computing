@@ -82,6 +82,52 @@ void clampedExpSerial(float* values, int* exponents, float* output, int N) {
 void clampedExpVector(float* values, int* exponents, float* output, int N) {
     // Implement your vectorized version of clampedExpSerial here
     //  ...
+    __cmu418_vec_float xpower;
+    __cmu418_vec_float res;
+    __cmu418_vec_int exp;
+    __cmu418_mask maskExpNotZero;
+    __cmu418_mask maskAll;
+    __cmu418_vec_int shift_right = _cmu418_vset_int(1);
+    __cmu418_vec_int zero_vec    = _cmu418_vset_int(0);
+    __cmu418_vec_float maxOuput  = _cmu418_vset_float(4.18f);
+    __cmu418_mask maskExpLastBitIsOne;
+    __cmu418_vec_int lastBit;
+    __cmu418_mask maskInRangeBits;
+    int inRangeBits = N >= VECTOR_WIDTH? VECTOR_WIDTH:N;
+    maskInRangeBits = _cmu418_init_ones(inRangeBits);
+    for(int i = 0; i < N; i +=VECTOR_WIDTH){
+        maskExpNotZero = _cmu418_init_ones(0);
+        maskAll        = _cmu418_init_ones();
+        // _cmu418_vload_float(res, values + i, maskAll);
+        res = _cmu418_vset_float(1.f);
+        inRangeBits = (N -i) >= VECTOR_WIDTH?VECTOR_WIDTH:N-i;
+        maskInRangeBits = _cmu418_init_ones(inRangeBits);
+        maskExpLastBitIsOne = _cmu418_init_ones(0);
+        _cmu418_vload_float(xpower, values + i, maskInRangeBits);
+        _cmu418_vload_int(exp, exponents + i, maskInRangeBits);
+        _cmu418_vgt_int(maskExpNotZero, exp, zero_vec, maskInRangeBits);
+        lastBit = _cmu418_vset_int(0);
+        _cmu418_vbitand_int(lastBit, exp, shift_right, maskExpNotZero);
+        _cmu418_vgt_int(maskExpLastBitIsOne, lastBit, zero_vec, maskExpNotZero);
+        int exp_bits = _cmu418_cntbits(maskExpNotZero);
+        while(exp_bits > 0){
+            _cmu418_vmult_float(res, res, xpower, maskExpLastBitIsOne);
+            _cmu418_vshiftright_int(exp, exp, shift_right, maskExpNotZero);
+            _cmu418_vgt_int(maskExpNotZero, exp, zero_vec, maskInRangeBits);
+             _cmu418_vmult_float(xpower, xpower, xpower, maskExpNotZero);
+             lastBit = _cmu418_vset_int(0);
+             _cmu418_vbitand_int(lastBit, exp, shift_right, maskExpNotZero);
+             maskExpLastBitIsOne = _cmu418_init_ones(0);
+             _cmu418_vgt_int(maskExpLastBitIsOne, lastBit, zero_vec, maskExpNotZero);
+            exp_bits = _cmu418_cntbits(maskExpNotZero);
+        }
+
+        __cmu418_mask maskResBelow = _cmu418_init_ones(0);
+        _cmu418_vlt_float(maskResBelow, res, maxOuput, maskInRangeBits);
+        _cmu418_vstore_float(output+i,  maxOuput, maskInRangeBits);
+        _cmu418_vstore_float(output+i,  res, maskResBelow);
+        // _cmu418_vstore_float(output+i, res, maskAll);
+    }
 }
 
 

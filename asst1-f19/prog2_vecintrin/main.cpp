@@ -100,7 +100,7 @@ int main(int argc, char * argv[]) {
       printf("Passed!!!\n");
     }
   } else {
-    printf("Must have N % VECTOR_WIDTH == 0 for this problem (VECTOR_WIDTH is %d)\n", VECTOR_WIDTH);
+    printf("Must have N %% VECTOR_WIDTH == 0 for this problem (VECTOR_WIDTH is %d)\n", VECTOR_WIDTH);
   }
 
   delete[] values;
